@@ -1,22 +1,93 @@
 ---
-title: "C-DSS-ML-Assignment"
+title: "Machine Learning Based on Activities and Wearable Technology Data"
 author: "jusck"
 date: "22 August 2015"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Executive Summary
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. Based on data from from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
 
-```{r}
-summary(cars)
+This paper shows the result of building a machine learning algorithm to predict activity quality from activity monitors. 
+
+What we expect the out of sample error to be and estimate the error appropriately with cross-validation:
+
+xxxxxxx
+
+## Working Notes
+
+The data required is read from the urls below using appropriate R-Code (see Markdown file - as not echo'd to the report)
+```{r, echo=FALSE}
+require(caret)
+download.file(url='https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv',destfile='training.csv',method='curl')
+download.file(url='https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv',destfile='testing.csv',method='curl')
+training<-read.csv('training.csv')
+testing<-read.csv('testing.csv')
 ```
 
-You can also embed plots, for example:
+Next the key items of data (ignoring columns with NA values) and removing variables relating to record ID's, users and date and time stamps (first 7 cols) are subsetted and furthemore the training set is divided into two for the purposes of cross validation. 
+
+We then run the true training data into a partition tree model. Once the model is complete we show the tree and calculate GINI for both training and set split off for validation. The testing set will be used to run the model against to produce results for the assignment (since this contains no classe variable to test accuracy on).
 
 ```{r, echo=FALSE}
-plot(cars)
+# Factor classe if not already
+training$classe=factor(training$classe)
+training<-training[,8:160]
+training<-training[,colSums(is.na(training)) == 0]
+
+set.seed(111)
+inTrain<-createDataPartition(training$classe,p=0.5,list=F)
+truetrain<-training[inTrain,]
+truetest<-training[-inTrain,]
+
+# Set seed and fit model of rpart type
+set.seed(1234)
+modFit <- train(classe ~ .,data=truetrain, method="rpart")
+
+# Calculate GINI for both training and testing sets
+trnVal<-truetrain$classe
+trnPred<-predict(modFit,truetrain)
+trnright<-((trnVal==trnPred)==T)
+trnwrong<-((trnVal==trnPred)==F)
+trnpop<-trnright+trnwrong
+trngini<-1−((trnwrong/trnpop)^2+(trnright/trnpop)^2)
+
+
+tstVal<-turetest$classe
+tstPred<-predict(modFit,truetest)
+tstright<-((tstVal==tstPred)==T)
+tstwrong<-((tstVal==tstPred)==F)
+tstpop<-tstright+tstwrong
+tstgini<-1−((tstwrong/tstpop)^2+(tstright/tstpop)^2)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+# Plot the tree 
+plot(modFit$finalModel, uniform=TRUE, 
+      main="Classification Tree")
+text(modFit$finalModel, use.n=TRUE, all=TRUE, cex=.8)
+cat ('Gini for True Training Set:')
+trngini
+cat ('Gini for True Testing Set:')
+tstgini
+```
+
+We can see that the GINI for training is xxx. Expecting a value close to zero this shows a reasonably low level of impurity of predicted values from the model for both the training and testing set. We therefore deem it appropriate to use this model.
+
+```{r}
+tstPred<-predict(modFit,truetest)
+
+## Credit for making data available:
+
+The training data for this project are available here: 
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here: 
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har kind permission to use the data for 
+the purposes of this class has been granted.
