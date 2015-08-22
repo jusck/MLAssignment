@@ -11,9 +11,16 @@ Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible t
 
 This paper shows the result of building a machine learning algorithm to predict activity quality from activity monitors. 
 
-What we expect the out of sample error to be and estimate the error appropriately with cross-validation:
+### Cross validation
 
-xxxxxxx
+We are using a random forrest technique. Once applied we use a GINI index to assess the impurity for both a training set (a random selection of 50% of the training records) and a test set of the other 50% of the training records. 
+
+In our working below we have GINI values very close to 0 which shows the training has been good and also it works well for a new sample.
+
+### Result from model
+Once the model has been created and tested we applied to the test set and gained the following answers:
+
+"B" "A" "B" "A" "A" "E" "D" "B" "A" "A" "B" "C" "B" "A" "E" "E" "A" "B" "B" "B"
 
 ## Working Notes
 
@@ -26,58 +33,102 @@ training<-read.csv('training.csv')
 testing<-read.csv('testing.csv')
 ```
 
-Next the key items of data (ignoring columns with NA values) and removing variables relating to record ID's, users and date and time stamps (first 7 cols) are subsetted and furthemore the training set is divided into two for the purposes of cross validation. 
+Next the key items of data from variable starting with "roll_", "pitch_" , "yaw_" and coordinate variables ending in "x", "y"", "z were selected. 
 
-We then run the true training data into a partition tree model. Once the model is complete we show the tree and calculate GINI for both training and set split off for validation. The testing set will be used to run the model against to produce results for the assignment (since this contains no classe variable to test accuracy on).
+Furthemore the training set wass divided into two for the purposes of cross validation of the training. 
+
+We then run the true training data into a random forrest model. Once the model was complete we calculate GINI for both training and set split off for validation. The testing set was then used to run the model against to produce results for the assignment (since this contains no classe variable to test accuracy on).
 
 ```{r, echo=FALSE}
 # Factor classe if not already
 training$classe=factor(training$classe)
-training<-training[,8:160]
-training<-training[,colSums(is.na(training)) == 0]
+# Select the variables of interest
+matchcols<-(    grepl('^roll',names(training))+
+                        grepl('^pitch_',names(training))+
+                        grepl('^yaw_',names(training))+
+                        grepl('_z$',names(training))+
+                        grepl('_y$',names(training))+
+                        grepl('_x$',names(training)))==1
 
+trainset<-training[,matchcols]
+trainset$classe<-training$classe
+
+# Use the same set from the testing set for later use on prediction
+testset<-testing[,matchcols]
+
+#Shuffle the order of the training set (seed is set for shuffling)
+set.seed(12)
+trainset <- trainset[sample(1:nrow(trainset),length(1:nrow(trainset))),1:ncol(trainset)]
+
+
+# Divide the training set supplied into 2 - one for actual training and one for validation of the model.
+# Set the seed for the paritioning
 set.seed(111)
-inTrain<-createDataPartition(training$classe,p=0.5,list=F)
-truetrain<-training[inTrain,]
-truetest<-training[-inTrain,]
+inTrain<-createDataPartition(trainset$classe,p=0.5,list=F)
+truetrain<-trainset[inTrain,]
+truetest<-trainset[-inTrain,]
 
-# Set seed and fit model of rpart type
+# Set seed and fit model of "rf" type
 set.seed(1234)
-modFit <- train(classe ~ .,data=truetrain, method="rpart")
+setwd("~/Desktop/MLAssignment")
+modFit <- train(classe ~ .,data=truetrain, method="rf")
+
+# Load the modFit if previously saved (to save time)
+# load(file='modFit')
+# Save the model as it's creation above has taken a while.
+# save(modFit,file='modFit')
 
 # Calculate GINI for both training and testing sets
 trnVal<-truetrain$classe
 trnPred<-predict(modFit,truetrain)
-trnright<-((trnVal==trnPred)==T)
-trnwrong<-((trnVal==trnPred)==F)
+trnright<-sum((trnVal==trnPred)==T)
+trnwrong<-sum((trnVal==trnPred)==F)
 trnpop<-trnright+trnwrong
-trngini<-1−((trnwrong/trnpop)^2+(trnright/trnpop)^2)
+trngini<-1-((trnwrong/trnpop)^2+(trnright/trnpop)^2)
 
-
-tstVal<-turetest$classe
+tstVal<-truetest$classe
 tstPred<-predict(modFit,truetest)
-tstright<-((tstVal==tstPred)==T)
-tstwrong<-((tstVal==tstPred)==F)
+tstright<-sum((tstVal==tstPred)==T)
+tstwrong<-sum((tstVal==tstPred)==F)
 tstpop<-tstright+tstwrong
-tstgini<-1−((tstwrong/tstpop)^2+(tstright/tstpop)^2)
+tstgini<-1-((tstwrong/tstpop)^2+(tstright/tstpop)^2)
 ```
 
 
 ```{r}
-# Plot the tree 
-plot(modFit$finalModel, uniform=TRUE, 
-      main="Classification Tree")
-text(modFit$finalModel, use.n=TRUE, all=TRUE, cex=.8)
+modFit
+modFit$finalModel
+# Print the GINI's
 cat ('Gini for True Training Set:')
 trngini
 cat ('Gini for True Testing Set:')
 tstgini
 ```
 
-We can see that the GINI for training is xxx. Expecting a value close to zero this shows a reasonably low level of impurity of predicted values from the model for both the training and testing set. We therefore deem it appropriate to use this model.
+We can see that the GINI for training is 0. Expecting a value close to zero this shows a reasonably low level of impurity of predicted values. The testing set has a value of 0.0156 which is also very close to 0. We therefore deem it appropriate to use this model for the following tests.
 
 ```{r}
-tstPred<-predict(modFit,truetest)
+# Apply the model to the testing set.
+testingPred<-predict(modFit,testing)
+# Make sure it's a character vector
+answers<-as.character(testingPred)
+# Show the result.
+answers
+```
+
+```{r, echo=FALSE}
+# Write the output to files as per the assignment.
+setwd("~/Desktop/MLAssignment")
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+ 
+pml_write_files(answers)
+```
 
 ## Credit for making data available:
 
